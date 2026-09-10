@@ -1,0 +1,40 @@
+# Saltbox Traefik *file* provider config.
+# Do not edit this copy in place on the Saltbox host — run scripts/saltbox-publish.sh
+# which writes /opt/traefik/wud.yml with DOMAIN and this box's middleware chain.
+#
+# Manual fallback (replace example.com with your Saltbox domain):
+#   sudo cp traefik/wud.yml /opt/traefik/wud.yml
+http:
+  routers:
+    wud-http:
+      entryPoints:
+        - web
+      rule: "Host(`wud.example.com`)"
+      middlewares:
+        - "globalHeaders@file"
+        - "redirect-to-https@docker"
+        - "robotHeaders@file"
+        - "cloudflarewarp@docker"
+        - "authelia@docker"
+      service: wud
+      priority: 20
+    wud:
+      entryPoints:
+        - websecure
+      rule: "Host(`wud.example.com`)"
+      middlewares:
+        - "globalHeaders@file"
+        - "secureHeaders@file"
+        - "robotHeaders@file"
+        - "cloudflarewarp@docker"
+        - "authelia@docker"
+      service: wud
+      priority: 20
+      tls:
+        options: securetls@file
+        certResolver: cfdns
+  services:
+    wud:
+      loadBalancer:
+        servers:
+          - url: "http://wud:3000"
