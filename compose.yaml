@@ -25,7 +25,6 @@ services:
       WUD_WATCHER_LOCAL_WATCHALL: "${WUD_WATCHER_LOCAL_WATCHALL:-false}"
       WUD_WATCHER_LOCAL_WATCHATSTART: "${WUD_WATCHER_LOCAL_WATCHATSTART:-true}"
       WUD_WATCHER_LOCAL_WATCHEVENTS: "${WUD_WATCHER_LOCAL_WATCHEVENTS:-true}"
-      WUD_WATCHER_LOCAL_WATCHDIGESTDEFAULT: "${WUD_WATCHER_LOCAL_WATCHDIGESTDEFAULT:-true}"
     volumes:
       - ./data/store:/store
       - /var/run/docker.sock:/var/run/docker.sock:ro
