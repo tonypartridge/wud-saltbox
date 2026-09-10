@@ -9,12 +9,13 @@ Watcher options: [Docker Watchers](https://getwud.app/docs/configuration/watcher
 ## What this stack does
 
 - Joins the external `saltbox` network so Traefik can reach `http://wud:3000`
-- Mounts `/var/run/docker.sock` **read-only** (discover and scan only — no auto-recreate)
+- Mounts `/var/run/docker.sock` **read-only** (WUD itself does not recreate containers)
 - Watcher `local` scans running containers daily at 01:00 (host TZ), with 60s jitter to spread Docker Hub calls
+- When an update is found **between 01:00 and 03:00**, a command trigger runs host `sb install <container>` (Saltbox/sandbox roles only, one at a time)
 - Does **not** publish host port 3000
 - Does **not** set `WATCHDIGESTDEFAULT` (WUD 8.4.0 rejects it and then registers **no** Docker watcher)
 
-Auto-updating Saltbox catalog containers from WUD is a bad idea — Ansible owns those. Use the UI as a report, then `sb install <app>` (or recreate your own Compose apps) when you want the new image.
+Custom Compose apps with no matching `sb` role (this stack, Arbor, …) are skipped. Outside 01:00–03:00 the trigger no-ops so a daytime WUD restart does not start Ansible.
 
 ## Deploy
 
@@ -29,7 +30,7 @@ cp .env.example .env          # set DOMAIN to your Saltbox domain
 mkdir -p data/store
 
 docker network inspect saltbox >/dev/null
-docker compose up -d --force-recreate
+docker compose up -d --build --force-recreate
 
 # File provider — this is what actually creates the Traefik router
 ./scripts/saltbox-publish.sh
@@ -55,7 +56,25 @@ Configured on the WUD container (not on each app):
 | `WUD_WATCHER_LOCAL_WATCHALL` | `false` | Running containers only |
 | `WUD_WATCHER_LOCAL_WATCHEVENTS` | `true` | Pick up start/stop immediately |
 
-Opt a container **out** with label `wud.watch=false`. Pin a tag pattern with `wud.tag.include` (see [container labels](https://getwud.app/docs/configuration/watchers/)).
+Opt a container **out** of watching with label `wud.watch=false`. Pin a tag pattern with `wud.tag.include` (see [container labels](https://getwud.app/docs/configuration/watchers/)).
+
+## Nightly `sb install` (01:00–03:00)
+
+WUD cannot run Ansible inside its own container. The image is built from `getwud/wud` plus `nsenter`, Compose uses `pid: host` and `privileged: true`, and the [command trigger](https://getwud.app/docs/configuration/triggers/command/) executes `scripts/sb-install.sh`.
+
+Flow:
+
+1. 01:00 — watcher scan (`WUD_WATCHER_LOCAL_CRON`)
+2. For each container with an update, WUD runs the script (env var `name`)
+3. Script exits 0 without doing anything unless the hour is 1 or 2
+4. Script skips names in `SB_INSTALL_SKIP` and names with no role under `/srv/git/saltbox/roles` or `/opt/sandbox/roles`
+5. Remaining names run `flock … sb install <name>` on the host, one after another (`TIMEOUT=0` because a role can take many minutes)
+
+Turn it off with `SB_INSTALL_ENABLED=false` in `.env`, then `docker compose up -d`. Widen the window with `SB_INSTALL_HOUR_START` / `SB_INSTALL_HOUR_END` (end is exclusive: `3` means stop at 03:00).
+
+Logs: `docker compose logs -f wud` and look for `sb-install:`.
+
+This is **not** a Docker recreate. Traefik/Plex/etc. go through the same Ansible path you would run by hand. Extra instances whose container name is not the role directory (uncommon) are skipped until you add a matching role folder or install them yourself.
 
 ## Email (optional)
 
