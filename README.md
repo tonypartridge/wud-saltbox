@@ -75,6 +75,20 @@ Turn it off with `SB_INSTALL_ENABLED=false` in `.env`, then `docker compose up -
 
 Logs: `docker compose logs -f wud` and look for `sb-install:`.
 
+### Apply pending updates now (do not wait until 01:00)
+
+The nightly trigger refuses to run `sb` outside 01:00–03:00. To drain the WUD queue as the Saltbox user:
+
+```sh
+cd /opt/wud
+git pull
+chmod +x scripts/apply-now.sh
+# 24 roles can take hours — use tmux/screen
+./scripts/apply-now.sh
+```
+
+That reads `GET /api/containers` from the `wud` container and runs `sb install` (with `sandbox-` for Sandbox apps) one at a time. Custom Compose names with no role are skipped.
+
 This is **not** a Docker recreate. Traefik/Plex/etc. go through the same Ansible path you would run by hand. Extra instances whose container name is not the role directory (uncommon) are skipped until you add a matching role folder or install them yourself.
 
 ## Email (optional)
