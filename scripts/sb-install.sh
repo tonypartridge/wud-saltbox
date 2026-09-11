@@ -1,8 +1,12 @@
 #!/bin/sh
-# WUD command trigger: run host `sb install <container>` when an image update
+# WUD command trigger: run host `sb install <tag>` when an image update
 # is found, but only between SB_INSTALL_HOUR_START and SB_INSTALL_HOUR_END
 # (default 01:00–03:00, host TZ). Serialized with flock so Ansible is not
 # run in parallel.
+#
+# Sandbox role dirs are named tofa, watchstate, … but the CLI tag is
+# sandbox-tofa, sandbox-watchstate. Core roles use the directory name as-is.
+# Ansible must run as the Saltbox user (default media), not root.
 set -eu
 
 log() {
@@ -11,6 +15,7 @@ log() {
 
 name="${name:-}"
 name="${name#/}"
+user="${SB_INSTALL_USER:-media}"
 
 if [ "${SB_INSTALL_ENABLED:-true}" != "true" ]; then
   log "disabled (SB_INSTALL_ENABLED=${SB_INSTALL_ENABLED-})"
@@ -26,6 +31,13 @@ case "$name" in
   *[!a-zA-Z0-9_.-]*)
     log "refuse unsafe container name: $name"
     exit 0
+    ;;
+esac
+
+case "$user" in
+  *[!a-zA-Z0-9_.-]*)
+    log "refuse unsafe SB_INSTALL_USER: $user"
+    exit 1
     ;;
 esac
 
@@ -64,12 +76,18 @@ host_sh() {
   nsenter --target 1 --mount --uts --ipc --net -- /bin/sh -c "$1"
 }
 
-if ! host_sh "test -d /srv/git/saltbox/roles/${name} || test -d /opt/sandbox/roles/${name}"; then
+tag=""
+if host_sh "test -d /srv/git/saltbox/roles/${name}"; then
+  tag="$name"
+elif host_sh "test -d /opt/sandbox/roles/${name}"; then
+  tag="sandbox-${name}"
+else
   log "$name: no Saltbox/sandbox role; skip (custom compose)"
   exit 0
 fi
 
-log "$name: sb install (serialized)"
-# flock lives on the host so overlapping simple-mode triggers queue.
-host_sh "flock /tmp/wud-sb-install.lock /usr/local/bin/sb install ${name}"
-log "$name: sb install finished"
+log "$name: sb install ${tag} as ${user} (serialized)"
+# flock on the host so overlapping simple-mode triggers queue.
+# runuser: Saltbox playbooks must not run as root.
+host_sh "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin flock /tmp/wud-sb-install.lock runuser -u ${user} -- /usr/local/bin/sb install ${tag}"
+log "$name: sb install ${tag} finished"

@@ -32,6 +32,7 @@ services:
       SB_INSTALL_ENABLED: "${SB_INSTALL_ENABLED:-true}"
       SB_INSTALL_HOUR_START: "${SB_INSTALL_HOUR_START:-1}"
       SB_INSTALL_HOUR_END: "${SB_INSTALL_HOUR_END:-3}"
+      SB_INSTALL_USER: "${SB_INSTALL_USER:-media}"
       SB_INSTALL_SKIP: "${SB_INSTALL_SKIP:-wud,arbor,arbor-vnc,arbour-fetcher,arbor-fetcher}"
       WUD_TRIGGER_COMMAND_SALTBOX_CMD: /scripts/sb-install.sh
       WUD_TRIGGER_COMMAND_SALTBOX_SHELL: /bin/sh

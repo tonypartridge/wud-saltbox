@@ -11,7 +11,7 @@ Watcher options: [Docker Watchers](https://getwud.app/docs/configuration/watcher
 - Joins the external `saltbox` network so Traefik can reach `http://wud:3000`
 - Mounts `/var/run/docker.sock` **read-only** (WUD itself does not recreate containers)
 - Watcher `local` scans running containers daily at 01:00 (host TZ), with 60s jitter to spread Docker Hub calls
-- When an update is found **between 01:00 and 03:00**, a command trigger runs host `sb install <container>` (Saltbox/sandbox roles only, one at a time)
+- When an update is found **between 01:00 and 03:00**, a command trigger runs host `sb install` as the Saltbox user (`media`): core roles use the container name, sandbox roles use `sandbox-<name>`
 - Does **not** publish host port 3000
 - Does **not** set `WATCHDIGESTDEFAULT` (WUD 8.4.0 rejects it and then registers **no** Docker watcher)
 
@@ -68,7 +68,8 @@ Flow:
 2. For each container with an update, WUD runs the script (env var `name`)
 3. Script exits 0 without doing anything unless the hour is 1 or 2
 4. Script skips names in `SB_INSTALL_SKIP` and names with no role under `/srv/git/saltbox/roles` or `/opt/sandbox/roles`
-5. Remaining names run `flock … sb install <name>` on the host, one after another (`TIMEOUT=0` because a role can take many minutes)
+5. Core role → `runuser -u media -- sb install <name>`. Sandbox role → `sb install sandbox-<name>` (the CLI tag is not the folder name)
+6. Installs are serialized with `flock` (`TIMEOUT=0` because a role can take many minutes)
 
 Turn it off with `SB_INSTALL_ENABLED=false` in `.env`, then `docker compose up -d`. Widen the window with `SB_INSTALL_HOUR_START` / `SB_INSTALL_HOUR_END` (end is exclusive: `3` means stop at 03:00).
 
